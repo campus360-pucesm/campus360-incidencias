@@ -34,4 +34,4 @@ uvicorn app.main:app --reload
 ## 👥 Integrantes del Equipo
 * Dev Principal: Daniel Zambrano Macias y Marlon Mendoza Mendoza
 * Product Owner del módulo: Yhony Cantos
-* Scrum Master asignado:
+* Scrum Master asignado: Yakov Seni
