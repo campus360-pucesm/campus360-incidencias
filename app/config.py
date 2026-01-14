@@ -13,11 +13,13 @@ DATABASE_URL = os.getenv(
 )
 
 # Crear motor de SQLAlchemy
+# Supabase requiere SSL mode = 'require' para conexiones externas
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,  # Verifica conexiones antes de usarlas
+    pool_pre_ping=True,
     pool_size=10,
-    max_overflow=20
+    max_overflow=20,
+    connect_args={"sslmode": "require"}
 )
 
 # Crear clase base para modelos
