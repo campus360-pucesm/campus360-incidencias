@@ -6,7 +6,7 @@ from app.models.models import Incidencia, HistorialIncidencia
 
 # Crear tablas al iniciar (solo en desarrollo)
 # En producción, usar migraciones con Alembic
-Base.metadata.create_all(bind=engine)
+#Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="CAMPUS360 - Incidencias",

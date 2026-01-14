@@ -246,19 +246,16 @@ async def actualizar_incidencia(
     except PermissionDenied as e:
         raise e
     
-    # Obtener usuario interno
-    usuario_interno = UsuarioService.obtener_o_crear_usuario(
-        db=db,
-        usuario_id=usuario_id,
-        email=usuario.get("email", ""),
-        full_name=usuario.get("full_name", usuario.get("name"))
-    )
-    
+    # Validar que el usuario existe (opcional, ya que el JWT lo valida, y la FK en DB también)
+    # Pero para asegurarnos que está en nuestra tabla 'users' cacheada/mapeada:
+    if not UsuarioService.obtener_usuario_por_id(db, usuario_id):
+          raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
     incidencia = IncidenciaService.actualizar_incidencia(
         db=db,
         incidencia_id=ticket_id,
         incidencia_data=incidencia_data,
-        usuario_id=usuario_interno.id
+        usuario_id=usuario_id
     )
     
     if not incidencia:
@@ -297,20 +294,16 @@ async def asignar_responsable(
     except PermissionDenied as e:
         raise e
     
-    # Obtener usuario interno
-    usuario_interno = UsuarioService.obtener_o_crear_usuario(
-        db=db,
-        usuario_id=usuario_id,
-        email=usuario.get("email", ""),
-        full_name=usuario.get("full_name", usuario.get("name"))
-    )
-    
+    # Validar usuario
+    if not UsuarioService.obtener_usuario_por_id(db, usuario_id):
+          raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
     try:
         incidencia = IncidenciaService.asignar_responsable(
             db=db,
             incidencia_id=ticket_id,
             asignacion_data=asignacion_data,
-            usuario_id=usuario_interno.id
+            usuario_id=usuario_id
         )
     except ValueError as e:
         raise HTTPException(
@@ -354,20 +347,16 @@ async def cambiar_estado(
     except PermissionDenied as e:
         raise e
     
-    # Obtener usuario interno
-    usuario_interno = UsuarioService.obtener_o_crear_usuario(
-        db=db,
-        usuario_id=usuario_id,
-        email=usuario.get("email", ""),
-        full_name=usuario.get("full_name", usuario.get("name"))
-    )
+    # Validar usuario
+    if not UsuarioService.obtener_usuario_por_id(db, usuario_id):
+          raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
     try:
         incidencia = IncidenciaService.cambiar_estado(
             db=db,
             incidencia_id=ticket_id,
             cambio_estado=cambio_estado,
-            usuario_id=usuario_interno.id
+            usuario_id=usuario_id
         )
     except ValueError as e:
         raise HTTPException(
@@ -462,19 +451,15 @@ async def agregar_comentario(
     except PermissionDenied as e:
         raise e
     
-    # Obtener usuario interno
-    usuario_interno = UsuarioService.obtener_o_crear_usuario(
-        db=db,
-        usuario_id=usuario_id,
-        email=usuario.get("email", ""),
-        full_name=usuario.get("full_name", usuario.get("name"))
-    )
+    # Validar usuario
+    if not UsuarioService.obtener_usuario_por_id(db, usuario_id):
+          raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
     comentario = ComentarioService.crear_comentario(
         db=db,
         incidencia_id=ticket_id,
         comentario_data=comentario_data,
-        usuario_id=usuario_interno.id
+        usuario_id=usuario_id
     )
     
     return comentario
