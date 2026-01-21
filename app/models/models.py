@@ -73,25 +73,32 @@ class Categoria(Base):
         return f"<Categoria(codigo='{self.codigo}', nombre='{self.nombre}')>"
 
 
-class Ubicacion(Base):
+class Recurso(Base):
     """
-    Catálogo de ubicaciones físicas (salones).
-    NOTA: En arquitectura de microservicios, los salones se obtienen del módulo de salones.
-    Esta tabla solo almacena IDs de referencia.
+    Modelo mapeado a la tabla 'recursos' del schema general.
+    Representa ubicaciones físicas del campus (salas, laboratorios, etc.)
+    para reportar incidencias.
     """
-    __tablename__ = "ubicaciones"
+    __tablename__ = "recursos"
 
-    id = Column(Integer, primary_key=True, index=True)
-    codigo = Column(String(50), unique=True, nullable=False, index=True)
-    nombre = Column(String(200), nullable=False)
-    edificio = Column(String(100), nullable=True)
-    piso = Column(String(20), nullable=True)
+    id = Column(String, primary_key=True)  # UUID en DB
+    codigo = Column(String, unique=True, nullable=False, index=True)
+    nombre = Column(String, nullable=False)
     descripcion = Column(Text, nullable=True)
-    activo = Column(Boolean, nullable=False, default=True)
-    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    tipo = Column(String, nullable=False)  # sala_estudio, laboratorio, etc.
+    ubicacion = Column(String, nullable=False)  # texto de ubicación
+    capacidad = Column(Integer, default=1)
+    estado = Column(String, default='disponible')
+    imagen_url = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     def __repr__(self):
-        return f"<Ubicacion(codigo='{self.codigo}', nombre='{self.nombre}')>"
+        return f"<Recurso(codigo='{self.codigo}', nombre='{self.nombre}')>"
+
+
+# Alias para compatibilidad con código existente
+Ubicacion = Recurso
 
 
 
@@ -146,7 +153,7 @@ class Incidencia(Base):
     # Referencias a microservicios externos (ahora con caché local)
     usuario_reportante_id = Column(String(100), ForeignKey("users.id"), nullable=False, index=True)
     responsable_id = Column(String(100), ForeignKey("users.id"), nullable=True, index=True)
-    salon_id = Column(String(100), nullable=True, index=True)  # ID del salón desde módulo de salones
+    ubicacion_id = Column(String, ForeignKey("recursos.id"), nullable=True, index=True)  # FK a tabla recursos
     
     # Timestamps
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -157,6 +164,7 @@ class Incidencia(Base):
     estado_rel = relationship("Estado", back_populates="incidencias")
     prioridad_rel = relationship("Prioridad", back_populates="incidencias")
     categoria_rel = relationship("Categoria", back_populates="incidencias")
+    ubicacion_rel = relationship("Recurso", foreign_keys=[ubicacion_id])
     
     # Relaciones con usuarios
     reportante = relationship("Usuario", foreign_keys=[usuario_reportante_id])

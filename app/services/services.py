@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 from datetime import datetime, timezone
 from app.models.models import (
     Incidencia, HistorialIncidencia, Usuario, Estado, Prioridad, 
-    Categoria, Ubicacion, Comentario, Adjunto, EstadoCodigo, PrioridadCodigo
+    Categoria, Recurso, Comentario, Adjunto, EstadoCodigo, PrioridadCodigo
 )
 from app.schemas.schemas import (
     IncidenciaCreate, IncidenciaUpdate, AsignarResponsableRequest, 
@@ -35,9 +35,12 @@ class CatalogoService:
         return db.query(Categoria).filter(Categoria.codigo == codigo, Categoria.activo == True).first()
 
     @staticmethod
-    def obtener_ubicacion_por_codigo(db: Session, codigo: str) -> Optional[Ubicacion]:
-        """Obtiene una ubicación por su código"""
-        return db.query(Ubicacion).filter(Ubicacion.codigo == codigo, Ubicacion.activo == True).first()
+    def obtener_ubicacion_por_codigo(db: Session, codigo: str) -> Optional[Recurso]:
+        """Obtiene una ubicación/recurso por su código"""
+        return db.query(Recurso).filter(
+            Recurso.codigo == codigo, 
+            Recurso.estado != 'fuera_servicio'
+        ).first()
 
     @staticmethod
     def listar_estados(db: Session, solo_activos: bool = True) -> List[Estado]:
@@ -64,12 +67,12 @@ class CatalogoService:
         return query.order_by(Categoria.nombre).all()
 
     @staticmethod
-    def listar_ubicaciones(db: Session, solo_activos: bool = True) -> List[Ubicacion]:
-        """Lista todas las ubicaciones"""
-        query = db.query(Ubicacion)
+    def listar_ubicaciones(db: Session, solo_activos: bool = True) -> List[Recurso]:
+        """Lista todas las ubicaciones/recursos del campus"""
+        query = db.query(Recurso)
         if solo_activos:
-            query = query.filter(Ubicacion.activo == True)
-        return query.order_by(Ubicacion.edificio, Ubicacion.piso, Ubicacion.nombre).all()
+            query = query.filter(Recurso.estado != 'fuera_servicio')
+        return query.order_by(Recurso.tipo, Recurso.nombre).all()
 
 
 # =============================================================================

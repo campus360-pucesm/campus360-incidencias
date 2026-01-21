@@ -93,8 +93,8 @@ CREATE TABLE IF NOT EXISTS incidencias (
     usuario_reportante_id TEXT NOT NULL,
     responsable_id TEXT,
     
-    -- Referencia a Salón/Recurso (puede ser ID de public.clases o public.recursos)
-    salon_id TEXT,
+    -- Referencia a Ubicación/Recurso (FK a public.recursos)
+    ubicacion_id UUID,
     
     -- Timestamps
     fecha_creacion TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -108,7 +108,8 @@ CREATE TABLE IF NOT EXISTS incidencias (
     
     -- Constraints FK a esquema public
     CONSTRAINT fk_incidencias_reportante FOREIGN KEY (usuario_reportante_id) REFERENCES public.users(id),
-    CONSTRAINT fk_incidencias_responsable FOREIGN KEY (responsable_id) REFERENCES public.users(id)
+    CONSTRAINT fk_incidencias_responsable FOREIGN KEY (responsable_id) REFERENCES public.users(id),
+    CONSTRAINT fk_incidencias_ubicacion FOREIGN KEY (ubicacion_id) REFERENCES public.recursos(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_incidencias_titulo ON incidencias(titulo);
@@ -116,6 +117,7 @@ CREATE INDEX IF NOT EXISTS idx_incidencias_estado ON incidencias(estado_id);
 CREATE INDEX IF NOT EXISTS idx_incidencias_prioridad ON incidencias(prioridad_id);
 CREATE INDEX IF NOT EXISTS idx_incidencias_usuario_reportante ON incidencias(usuario_reportante_id);
 CREATE INDEX IF NOT EXISTS idx_incidencias_responsable ON incidencias(responsable_id);
+CREATE INDEX IF NOT EXISTS idx_incidencias_ubicacion ON incidencias(ubicacion_id);
 
 -- HISTORIAL
 CREATE TABLE IF NOT EXISTS historial_incidencias (
@@ -187,7 +189,10 @@ SELECT
     u_repo.full_name AS usuario_reportante_nombre,
     i.responsable_id,
     u_resp.full_name AS responsable_nombre,
-    i.salon_id,
+    i.ubicacion_id,
+    r.codigo AS ubicacion_codigo,
+    r.nombre AS ubicacion_nombre,
+    r.ubicacion AS ubicacion_direccion,
     i.fecha_creacion,
     i.fecha_actualizacion,
     i.fecha_resolucion
@@ -196,4 +201,5 @@ FROM incidencias i
     INNER JOIN prioridades p ON i.prioridad_id = p.id
     LEFT JOIN categorias c ON i.categoria_id = c.id
     LEFT JOIN public.users u_repo ON i.usuario_reportante_id = u_repo.id
-    LEFT JOIN public.users u_resp ON i.responsable_id = u_resp.id;
+    LEFT JOIN public.users u_resp ON i.responsable_id = u_resp.id
+    LEFT JOIN public.recursos r ON i.ubicacion_id = r.id;
