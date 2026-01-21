@@ -23,18 +23,20 @@ def validar_es_administrador(usuario: dict) -> bool:
     """
     Valida si el usuario es administrador.
     El rol viene desde el JWT del módulo de autenticación.
+    Rol esperado: 'admin'
     """
     role = usuario.get("role", usuario.get("tipo_usuario", "")).lower()
-    return role in ["administrador", "admin"]
+    return role == "admin"
 
 
 def validar_es_tecnico(usuario: dict) -> bool:
     """
     Valida si el usuario es técnico (puede cambiar estados y asignar).
     El rol viene desde el JWT del módulo de autenticación.
+    Roles esperados: 'tecnico' o 'admin'
     """
     role = usuario.get("role", usuario.get("tipo_usuario", "")).lower()
-    return role in ["tecnico", "administrador", "admin"]
+    return role in ["tecnico", "admin"]
 
 
 def requiere_administrador(usuario: dict):
