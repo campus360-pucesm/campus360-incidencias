@@ -352,7 +352,7 @@ class IncidenciaService:
             raise ValueError(f"Usuario con ID {asignacion_data.responsable_id} no encontrado")
         
         responsable_anterior_id = incidencia.responsable_id
-        responsable_anterior_nombre = incidencia.responsable.nombre_completo if incidencia.responsable else None
+        responsable_anterior_nombre = incidencia.responsable.full_name if incidencia.responsable else None
         incidencia.responsable_id = asignacion_data.responsable_id
         
         # Si estaba pendiente, cambiar a asignada
@@ -370,9 +370,9 @@ class IncidenciaService:
             incidencia_id=incidencia_id,
             accion="responsable_asignado",
             usuario_id=usuario_id,
-            descripcion=asignacion_data.comentario or f"Responsable asignado: {responsable.nombre_completo}",
+            descripcion=asignacion_data.comentario or f"Responsable asignado: {responsable.full_name}",
             valor_anterior=responsable_anterior_nombre,
-            valor_nuevo=responsable.nombre_completo
+            valor_nuevo=responsable.full_name
         )
         
         return incidencia

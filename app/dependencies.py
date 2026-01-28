@@ -27,9 +27,9 @@ async def validate_jwt(credentials: HTTPAuthorizationCredentials = Depends(secur
     
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.post(
+            response = await client.get(
                 JWT_AUTH_SERVICE_URL,
-                json={"token": token},
+                headers={"Authorization": f"Bearer {token}"},
                 timeout=5.0
             )
             

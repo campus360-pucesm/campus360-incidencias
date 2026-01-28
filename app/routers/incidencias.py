@@ -112,13 +112,27 @@ async def crear_incidencia(
     Crea un nuevo ticket.
     Requiere autenticación JWT válida.
     """
+    # Extraer identificadores del JWT
+    usuario_id = usuario.get("user_id", usuario.get("id", usuario.get("sub")))
+    usuario_email = usuario.get("email", "")
+    usuario_nombre = usuario.get("full_name", usuario.get("name", ""))
+
+    # Si el JWT no incluye email o nombre completo, intentar obtenerlos desde la tabla `users`
+    if (not usuario_email or not usuario_nombre) and usuario_id:
+        usuario_db = UsuarioService.obtener_usuario_por_id(db, usuario_id)
+        if usuario_db:
+            if not usuario_email:
+                usuario_email = getattr(usuario_db, "email", "")
+            if not usuario_nombre:
+                usuario_nombre = getattr(usuario_db, "full_name", "")
+
     try:
         incidencia = IncidenciaService.crear_incidencia(
             db=db,
             incidencia_data=incidencia_data,
-            usuario_id=usuario.get("user_id", usuario.get("id", usuario.get("sub"))),
-            usuario_email=usuario.get("email", ""),
-            usuario_nombre=usuario.get("full_name", usuario.get("name"))
+            usuario_id=usuario_id,
+            usuario_email=usuario_email,
+            usuario_nombre=usuario_nombre
         )
         return incidencia
     except ValueError as e:
