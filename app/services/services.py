@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 from datetime import datetime, timezone
 from app.models.models import (
     Incidencia, HistorialIncidencia, Usuario, Estado, Prioridad, 
-    Categoria, Ubicacion, Comentario, Adjunto, EstadoCodigo, PrioridadCodigo
+    Categoria, Recurso, Comentario, Adjunto, EstadoCodigo, PrioridadCodigo
 )
 from app.schemas.schemas import (
     IncidenciaCreate, IncidenciaUpdate, AsignarResponsableRequest, 
@@ -35,9 +35,12 @@ class CatalogoService:
         return db.query(Categoria).filter(Categoria.codigo == codigo, Categoria.activo == True).first()
 
     @staticmethod
-    def obtener_ubicacion_por_codigo(db: Session, codigo: str) -> Optional[Ubicacion]:
-        """Obtiene una ubicación por su código"""
-        return db.query(Ubicacion).filter(Ubicacion.codigo == codigo, Ubicacion.activo == True).first()
+    def obtener_ubicacion_por_codigo(db: Session, codigo: str) -> Optional[Recurso]:
+        """Obtiene una ubicación/recurso por su código"""
+        return db.query(Recurso).filter(
+            Recurso.codigo == codigo, 
+            Recurso.estado != 'fuera_servicio'
+        ).first()
 
     @staticmethod
     def listar_estados(db: Session, solo_activos: bool = True) -> List[Estado]:
@@ -64,12 +67,12 @@ class CatalogoService:
         return query.order_by(Categoria.nombre).all()
 
     @staticmethod
-    def listar_ubicaciones(db: Session, solo_activos: bool = True) -> List[Ubicacion]:
-        """Lista todas las ubicaciones"""
-        query = db.query(Ubicacion)
+    def listar_ubicaciones(db: Session, solo_activos: bool = True) -> List[Recurso]:
+        """Lista todas las ubicaciones/recursos del campus"""
+        query = db.query(Recurso)
         if solo_activos:
-            query = query.filter(Ubicacion.activo == True)
-        return query.order_by(Ubicacion.edificio, Ubicacion.piso, Ubicacion.nombre).all()
+            query = query.filter(Recurso.estado != 'fuera_servicio')
+        return query.order_by(Recurso.tipo, Recurso.nombre).all()
 
 
 # =============================================================================
@@ -79,47 +82,7 @@ class CatalogoService:
 class UsuarioService:
     """Servicio para operaciones de usuarios"""
 
-    @staticmethod
-    def obtener_o_crear_usuario(
-        db: Session,
-        usuario_id: str,
-        email: str,
-        full_name: Optional[str] = None,
-        role: str = "usuario",
-        password_hash: str = ""
-    ) -> Usuario:
-        """
-        Obtiene un usuario por su ID o lo crea si no existe.
-        Esto permite sincronizar usuarios desde el servicio de autenticación.
-        """
-        usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
-
-        if not usuario:
-            usuario = Usuario(
-                id=usuario_id,
-                email=email,
-                password_hash=password_hash,
-                full_name=full_name,
-                role=role
-            )
-            db.add(usuario)
-            db.commit()
-            db.refresh(usuario)
-        else:
-            # Actualizar datos si han cambiado
-            updated = False
-            if email and usuario.email != email:
-                usuario.email = email
-                updated = True
-            if full_name and usuario.full_name != full_name:
-                usuario.full_name = full_name
-                updated = True
-            if updated:
-                db.commit()
-                db.refresh(usuario)
-
-        return usuario
-
+    #Tabla de usuario llamada users
     @staticmethod
     def obtener_usuario_por_id(db: Session, usuario_id: str) -> Optional[Usuario]:
         """Obtiene un usuario por su ID"""
@@ -134,9 +97,9 @@ class UsuarioService:
     def listar_tecnicos(db: Session) -> List[Usuario]:
         """Lista usuarios con rol de técnico o administrador"""
         return db.query(Usuario).filter(
-            Usuario.role.in_(["tecnico", "administrador"]),
-            Usuario.activo == True
+            Usuario.role.in_(["tecnico", "administrador"])
         ).all()
+
 
 
 # =============================================================================
@@ -158,13 +121,13 @@ class IncidenciaService:
         Crea una nueva incidencia.
         RF2: Crear incidencia
         """
-        # Obtener o crear usuario
-        usuario = UsuarioService.obtener_o_crear_usuario(
-            db=db,
-            usuario_id=usuario_id,
-            email=usuario_email,
-            full_name=usuario_nombre
-        )
+        # Verificar que el usuario existe
+        usuario = UsuarioService.obtener_usuario_por_id(db, usuario_id)
+        if not usuario:
+             # Si no lo encontramos pero tenemos datos del token, es extraño en una arquitectura compartida.
+             # Asumimos que el token es válido y el usuario existe en la tabla users aunque no lo haya traído la query por alguna razón
+             # (o replicación). Pero aquí es la misma DB. Así que si no está, no está.
+             raise ValueError(f"Usuario {usuario_id} no encontrado en la base de datos")
 
         # Obtener estado inicial (pendiente)
         estado = CatalogoService.obtener_estado_por_codigo(db, EstadoCodigo.PENDIENTE)
@@ -389,7 +352,7 @@ class IncidenciaService:
             raise ValueError(f"Usuario con ID {asignacion_data.responsable_id} no encontrado")
         
         responsable_anterior_id = incidencia.responsable_id
-        responsable_anterior_nombre = incidencia.responsable.nombre_completo if incidencia.responsable else None
+        responsable_anterior_nombre = incidencia.responsable.full_name if incidencia.responsable else None
         incidencia.responsable_id = asignacion_data.responsable_id
         
         # Si estaba pendiente, cambiar a asignada
@@ -407,9 +370,9 @@ class IncidenciaService:
             incidencia_id=incidencia_id,
             accion="responsable_asignado",
             usuario_id=usuario_id,
-            descripcion=asignacion_data.comentario or f"Responsable asignado: {responsable.nombre_completo}",
+            descripcion=asignacion_data.comentario or f"Responsable asignado: {responsable.full_name}",
             valor_anterior=responsable_anterior_nombre,
-            valor_nuevo=responsable.nombre_completo
+            valor_nuevo=responsable.full_name
         )
         
         return incidencia

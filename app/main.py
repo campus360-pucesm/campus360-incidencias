@@ -6,7 +6,7 @@ from app.models.models import Incidencia, HistorialIncidencia
 
 # Crear tablas al iniciar (solo en desarrollo)
 # En producción, usar migraciones con Alembic
-Base.metadata.create_all(bind=engine)
+#Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="CAMPUS360 - Incidencias",
@@ -37,3 +37,7 @@ def root():
         "version": "1.0.0",
         "docs": "/docs"
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8002)

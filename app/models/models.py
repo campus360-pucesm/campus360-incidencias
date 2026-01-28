@@ -73,33 +73,64 @@ class Categoria(Base):
         return f"<Categoria(codigo='{self.codigo}', nombre='{self.nombre}')>"
 
 
-class Ubicacion(Base):
+class Recurso(Base):
     """
-    Catálogo de ubicaciones físicas (salones).
-    NOTA: En arquitectura de microservicios, los salones se obtienen del módulo de salones.
-    Esta tabla solo almacena IDs de referencia.
+    Modelo mapeado a la tabla 'recursos' del schema general.
+    Representa ubicaciones físicas del campus (salas, laboratorios, etc.)
+    para reportar incidencias.
     """
-    __tablename__ = "ubicaciones"
+    __tablename__ = "recursos"
 
-    id = Column(Integer, primary_key=True, index=True)
-    codigo = Column(String(50), unique=True, nullable=False, index=True)
-    nombre = Column(String(200), nullable=False)
-    edificio = Column(String(100), nullable=True)
-    piso = Column(String(20), nullable=True)
+    id = Column(String, primary_key=True)  # UUID en DB
+    codigo = Column(String, unique=True, nullable=False, index=True)
+    nombre = Column(String, nullable=False)
     descripcion = Column(Text, nullable=True)
-    activo = Column(Boolean, nullable=False, default=True)
-    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    tipo = Column(String, nullable=False)  # sala_estudio, laboratorio, etc.
+    ubicacion = Column(String, nullable=False)  # texto de ubicación
+    capacidad = Column(Integer, default=1)
+    estado = Column(String, default='disponible')
+    imagen_url = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     def __repr__(self):
-        return f"<Ubicacion(codigo='{self.codigo}', nombre='{self.nombre}')>"
+        return f"<Recurso(codigo='{self.codigo}', nombre='{self.nombre}')>"
+
+
+# Alias para compatibilidad con código existente
+Ubicacion = Recurso
+
 
 
 
 
 
 # =============================================================================
-# TABLAS PRINCIPALES
+# MODELO DE USUARIO (Mapeado a tabla existente 'users')
 # =============================================================================
+
+class Usuario(Base):
+    """
+    Modelo mapeado a la tabla estandarizada 'users' del proyecto.
+    """
+    __tablename__ = "users"
+    # __table_args__ = {"schema": "public"} # Descomentar si es necesario explicitar esquema
+
+    id = Column(String, primary_key=True) # text en DB general
+    email = Column(String, nullable=False) # text en DB general
+    full_name = Column(String, nullable=False) # text en DB general
+    password_hash = Column(String, nullable=False) # text en DB general
+    role = Column(String, default="student", nullable=False) # text en DB general, default 'student'
+    created_at = Column(DateTime, server_default=func.now(), nullable=False) # timestamp en DB general
+
+    # Campos adicionales que mi módulo esperaba pero no están en users general:
+    # activo, fecha_actualizacion -> No están en general schema.
+    # Se eliminan para evitar errores de mapeo.
+
+    def __repr__(self):
+        return f"<Usuario(id='{self.id}', email='{self.email}')>"
+
+
 
 class Incidencia(Base):
     """
@@ -119,10 +150,10 @@ class Incidencia(Base):
     prioridad_id = Column(Integer, ForeignKey("prioridades.id"), nullable=False, index=True)
     categoria_id = Column(Integer, ForeignKey("categorias.id"), nullable=True, index=True)
     
-    # Referencias a microservicios externos (solo IDs, sin FK)
-    usuario_reportante_id = Column(String(100), nullable=False, index=True)  # ID del usuario desde módulo de usuarios
-    responsable_id = Column(String(100), nullable=True, index=True)  # ID del técnico desde módulo de usuarios
-    salon_id = Column(String(100), nullable=True, index=True)  # ID del salón desde módulo de salones
+    # Referencias a microservicios externos (ahora con caché local)
+    usuario_reportante_id = Column(String(100), ForeignKey("users.id"), nullable=False, index=True)
+    responsable_id = Column(String(100), ForeignKey("users.id"), nullable=True, index=True)
+    ubicacion_id = Column(String, ForeignKey("recursos.id"), nullable=True, index=True)  # FK a tabla recursos
     
     # Timestamps
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -133,6 +164,12 @@ class Incidencia(Base):
     estado_rel = relationship("Estado", back_populates="incidencias")
     prioridad_rel = relationship("Prioridad", back_populates="incidencias")
     categoria_rel = relationship("Categoria", back_populates="incidencias")
+    ubicacion_rel = relationship("Recurso", foreign_keys=[ubicacion_id])
+    
+    # Relaciones con usuarios
+    reportante = relationship("Usuario", foreign_keys=[usuario_reportante_id])
+    responsable = relationship("Usuario", foreign_keys=[responsable_id])
+    
     historial = relationship("HistorialIncidencia", back_populates="incidencia", cascade="all, delete-orphan")
     comentarios = relationship("Comentario", back_populates="incidencia", cascade="all, delete-orphan")
     adjuntos = relationship("Adjunto", back_populates="incidencia", cascade="all, delete-orphan")
@@ -154,7 +191,7 @@ class HistorialIncidencia(Base):
     # Información del cambio
     accion = Column(String(100), nullable=False)
     descripcion = Column(Text, nullable=True)
-    usuario_id = Column(String(100), nullable=False, index=True)  # ID del usuario (desde módulo de usuarios)
+    usuario_id = Column(String(100), ForeignKey("users.id"), nullable=False, index=True)
     
     # Valores anteriores y nuevos
     valor_anterior = Column(Text, nullable=True)
@@ -165,6 +202,7 @@ class HistorialIncidencia(Base):
     
     # Relaciones
     incidencia = relationship("Incidencia", back_populates="historial")
+    usuario = relationship("Usuario")
 
     def __repr__(self):
         return f"<HistorialIncidencia(id={self.id}, incidencia_id={self.incidencia_id}, accion='{self.accion}')>"
@@ -179,7 +217,7 @@ class Comentario(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     incidencia_id = Column(Integer, ForeignKey("incidencias.id", ondelete="CASCADE"), nullable=False, index=True)
-    usuario_id = Column(String(100), nullable=False, index=True)  # ID del usuario (desde módulo de usuarios)
+    usuario_id = Column(String(100), ForeignKey("users.id"), nullable=False, index=True)
     contenido = Column(Text, nullable=False)
     es_interno = Column(Boolean, nullable=False, default=False)
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -187,6 +225,7 @@ class Comentario(Base):
     
     # Relaciones
     incidencia = relationship("Incidencia", back_populates="comentarios")
+    usuario = relationship("Usuario")
 
     def __repr__(self):
         return f"<Comentario(id={self.id}, incidencia_id={self.incidencia_id})>"
@@ -205,11 +244,12 @@ class Adjunto(Base):
     tipo_mime = Column(String(100), nullable=True)
     tamanio_bytes = Column(BigInteger, nullable=True)
     ruta_almacenamiento = Column(Text, nullable=False)
-    usuario_id = Column(String(100), nullable=False)  # ID del usuario (desde módulo de usuarios)
+    usuario_id = Column(String(100), ForeignKey("users.id"), nullable=False)
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     # Relaciones
     incidencia = relationship("Incidencia", back_populates="adjuntos")
+    usuario = relationship("Usuario")
 
     def __repr__(self):
         return f"<Adjunto(id={self.id}, nombre='{self.nombre_archivo}')>"

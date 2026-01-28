@@ -64,13 +64,14 @@ class CategoriaResponse(CategoriaBase):
 
 
 class UbicacionBase(BaseModel):
-    """Schema base para ubicaciones"""
+    """Schema base para ubicaciones (mapeado a tabla recursos)"""
     codigo: str = Field(..., max_length=50)
     nombre: str = Field(..., max_length=200)
-    edificio: Optional[str] = Field(None, max_length=100)
-    piso: Optional[str] = Field(None, max_length=20)
+    tipo: str = Field(..., description="Tipo de recurso: sala_estudio, laboratorio, etc.")
+    ubicacion: str = Field(..., description="Ubicación física del recurso")
     descripcion: Optional[str] = None
-    activo: bool = Field(default=True)
+    capacidad: Optional[int] = Field(default=1)
+    estado: str = Field(default="disponible")
 
 
 class UbicacionCreate(UbicacionBase):
@@ -79,9 +80,9 @@ class UbicacionCreate(UbicacionBase):
 
 
 class UbicacionResponse(UbicacionBase):
-    """Schema de respuesta para ubicaciones"""
-    id: int
-    fecha_creacion: datetime
+    """Schema de respuesta para ubicaciones/recursos"""
+    id: str  # UUID en la tabla recursos
+    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -208,10 +209,10 @@ class AdjuntoResponse(BaseModel):
 class IncidenciaResponse(IncidenciaBase):
     """Schema de respuesta para una incidencia. RF5: Consultar incidencias"""
     id: int
-    estado: EstadoResponse
-    prioridad: PrioridadResponse
-    categoria: Optional[CategoriaResponse] = None
-    ubicacion: Optional[UbicacionResponse] = None
+    estado: EstadoResponse = Field(validation_alias="estado_rel")
+    prioridad: PrioridadResponse = Field(validation_alias="prioridad_rel")
+    categoria: Optional[CategoriaResponse] = Field(None, validation_alias="categoria_rel")
+    ubicacion: Optional[UbicacionResponse] = Field(None, validation_alias="ubicacion_rel")
     reportante: UsuarioSimpleResponse
     responsable: Optional[UsuarioSimpleResponse] = None
     fecha_creacion: datetime
@@ -227,9 +228,9 @@ class IncidenciaListResponse(BaseModel):
     """Schema para listar incidencias con paginación"""
     id: int
     titulo: str
-    estado: EstadoResponse
-    prioridad: PrioridadResponse
-    categoria: Optional[CategoriaResponse] = None
+    estado: EstadoResponse = Field(validation_alias="estado_rel")
+    prioridad: PrioridadResponse = Field(validation_alias="prioridad_rel")
+    categoria: Optional[CategoriaResponse] = Field(None, validation_alias="categoria_rel")
     reportante: UsuarioSimpleResponse
     responsable: Optional[UsuarioSimpleResponse] = None
     fecha_creacion: datetime

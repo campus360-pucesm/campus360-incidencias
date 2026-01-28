@@ -4,20 +4,16 @@
 -- Este archivo define la estructura de la base de datos para el módulo de
 -- gestión de incidencias de Campus360.
 -- 
--- ARQUITECTURA DE MICROSERVICIOS:
--- - Usuarios: Gestionados por módulo de autenticación/usuarios
--- - Salones/Ubicaciones: Gestionados por módulo de salones
--- - Este módulo solo almacena información de tickets/incidencias
+-- INTEGRACIÓN CON ESQUEMA GENERAL:
+-- - Usuarios: Se utiliza la tabla 'public.users' del esquema general.
+-- - Salones: Se hace referencia a IDs externos (o tablas public.clases/recursos).
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- TABLAS DE CATÁLOGO (Información interna del módulo)
+-- TABLAS DE CATÁLOGO (Deben crearse primero)
 -- -----------------------------------------------------------------------------
 
--- -----------------------------------------------------------------------------
--- TABLA: estados
--- Catálogo de estados posibles para incidencias (RF4: Estados del ticket)
--- -----------------------------------------------------------------------------
+-- ESTADOS
 CREATE TABLE IF NOT EXISTS estados (
     id SERIAL PRIMARY KEY,
     codigo VARCHAR(20) UNIQUE NOT NULL,
@@ -28,7 +24,6 @@ CREATE TABLE IF NOT EXISTS estados (
     fecha_creacion TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Datos iniciales de estados
 INSERT INTO estados (codigo, nombre, descripcion, orden) VALUES
     ('pendiente', 'Pendiente', 'Estado inicial, incidencia creada pero no asignada', 1),
     ('asignada', 'Asignada', 'Incidencia asignada a un responsable', 2),
@@ -38,10 +33,7 @@ INSERT INTO estados (codigo, nombre, descripcion, orden) VALUES
     ('cancelada', 'Cancelada', 'Incidencia cancelada', 6)
 ON CONFLICT (codigo) DO NOTHING;
 
--- -----------------------------------------------------------------------------
--- TABLA: prioridades
--- Catálogo de niveles de prioridad
--- -----------------------------------------------------------------------------
+-- PRIORIDADES
 CREATE TABLE IF NOT EXISTS prioridades (
     id SERIAL PRIMARY KEY,
     codigo VARCHAR(20) UNIQUE NOT NULL,
@@ -53,7 +45,6 @@ CREATE TABLE IF NOT EXISTS prioridades (
     fecha_creacion TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Datos iniciales de prioridades
 INSERT INTO prioridades (codigo, nombre, descripcion, nivel, color) VALUES
     ('baja', 'Baja', 'No urgente, puede esperar', 1, '#28A745'),
     ('media', 'Media', 'Prioridad normal', 2, '#FFC107'),
@@ -61,10 +52,7 @@ INSERT INTO prioridades (codigo, nombre, descripcion, nivel, color) VALUES
     ('urgente', 'Urgente', 'Requiere atención inmediata', 4, '#DC3545')
 ON CONFLICT (codigo) DO NOTHING;
 
--- -----------------------------------------------------------------------------
--- TABLA: categorias
--- Catálogo de categorías de incidencias
--- -----------------------------------------------------------------------------
+-- CATEGORÍAS
 CREATE TABLE IF NOT EXISTS categorias (
     id SERIAL PRIMARY KEY,
     codigo VARCHAR(50) UNIQUE NOT NULL,
@@ -74,7 +62,6 @@ CREATE TABLE IF NOT EXISTS categorias (
     fecha_creacion TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Datos iniciales de categorías
 INSERT INTO categorias (codigo, nombre, descripcion) VALUES
     ('infraestructura', 'Infraestructura', 'Problemas de edificios, aulas, mobiliario'),
     ('tecnologia', 'Tecnología', 'Problemas de equipos, redes, software'),
@@ -84,13 +71,11 @@ INSERT INTO categorias (codigo, nombre, descripcion) VALUES
     ('otros', 'Otros', 'Otras incidencias no categorizadas')
 ON CONFLICT (codigo) DO NOTHING;
 
+-- -----------------------------------------------------------------------------
+-- TABLAS PRINCIPALES
+-- -----------------------------------------------------------------------------
 
--- =============================================================================
--- TABLA: incidencias
--- Modelo principal para las incidencias/tickets (RF2: Crear incidencia)
--- Solo almacena datos de incidencias, referencias a usuarios y salones se
--- obtienen de otros microservicios mediante endpoints
--- =============================================================================
+-- INCIDENCIAS
 CREATE TABLE IF NOT EXISTS incidencias (
     id SERIAL PRIMARY KEY,
     
@@ -103,112 +88,91 @@ CREATE TABLE IF NOT EXISTS incidencias (
     prioridad_id INTEGER NOT NULL,
     categoria_id INTEGER,
     
-    -- Referencias a microservicios externos (solo IDs, sin FK)
-    usuario_reportante_id TEXT NOT NULL,  -- ID del usuario (desde módulo de usuarios)
-    responsable_id TEXT,  -- ID del técnico/responsable (desde módulo de usuarios)
-    salon_id TEXT,  -- ID del salón (desde módulo de salones)
+    -- Referencias a tablas generales (public.users)
+    -- NOTA: Se asume que public.users.id es TEXT.
+    usuario_reportante_id TEXT NOT NULL,
+    responsable_id TEXT,
+    
+    -- Referencia a Ubicación/Recurso (FK a public.recursos)
+    ubicacion_id UUID,
     
     -- Timestamps
     fecha_creacion TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion TIMESTAMP WITH TIME ZONE,
     fecha_resolucion TIMESTAMP WITH TIME ZONE,
     
-    -- Foreign Keys solo para catálogos internos
-    CONSTRAINT fk_incidencias_estado 
-        FOREIGN KEY (estado_id) REFERENCES estados(id),
-    CONSTRAINT fk_incidencias_prioridad 
-        FOREIGN KEY (prioridad_id) REFERENCES prioridades(id),
-    CONSTRAINT fk_incidencias_categoria 
-        FOREIGN KEY (categoria_id) REFERENCES categorias(id)
+    -- Constraints FK internas
+    CONSTRAINT fk_incidencias_estado FOREIGN KEY (estado_id) REFERENCES estados(id),
+    CONSTRAINT fk_incidencias_prioridad FOREIGN KEY (prioridad_id) REFERENCES prioridades(id),
+    CONSTRAINT fk_incidencias_categoria FOREIGN KEY (categoria_id) REFERENCES categorias(id),
+    
+    -- Constraints FK a esquema public
+    CONSTRAINT fk_incidencias_reportante FOREIGN KEY (usuario_reportante_id) REFERENCES public.users(id),
+    CONSTRAINT fk_incidencias_responsable FOREIGN KEY (responsable_id) REFERENCES public.users(id),
+    CONSTRAINT fk_incidencias_ubicacion FOREIGN KEY (ubicacion_id) REFERENCES public.recursos(id)
 );
 
--- Índices para optimizar consultas
 CREATE INDEX IF NOT EXISTS idx_incidencias_titulo ON incidencias(titulo);
 CREATE INDEX IF NOT EXISTS idx_incidencias_estado ON incidencias(estado_id);
 CREATE INDEX IF NOT EXISTS idx_incidencias_prioridad ON incidencias(prioridad_id);
-CREATE INDEX IF NOT EXISTS idx_incidencias_categoria ON incidencias(categoria_id);
 CREATE INDEX IF NOT EXISTS idx_incidencias_usuario_reportante ON incidencias(usuario_reportante_id);
 CREATE INDEX IF NOT EXISTS idx_incidencias_responsable ON incidencias(responsable_id);
-CREATE INDEX IF NOT EXISTS idx_incidencias_salon ON incidencias(salon_id);
-CREATE INDEX IF NOT EXISTS idx_incidencias_fecha_creacion ON incidencias(fecha_creacion);
+CREATE INDEX IF NOT EXISTS idx_incidencias_ubicacion ON incidencias(ubicacion_id);
 
--- -----------------------------------------------------------------------------
--- TABLA: historial_incidencias
--- Historial de cambios de una incidencia (RF7: Historial)
--- -----------------------------------------------------------------------------
+-- HISTORIAL
 CREATE TABLE IF NOT EXISTS historial_incidencias (
     id SERIAL PRIMARY KEY,
-    
-    -- Relación con incidencia
     incidencia_id INTEGER NOT NULL,
-    
-    -- Información del cambio
     accion VARCHAR(100) NOT NULL,
     descripcion TEXT,
-    usuario_id TEXT NOT NULL,  -- Usuario que realizó la acción
-    
-    -- Valores anteriores y nuevos (almacenados como JSON)
+    usuario_id TEXT NOT NULL, -- FK a public.users
     valor_anterior TEXT,
     valor_nuevo TEXT,
-    
-    -- Timestamp
-    fecha_cambio TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-    
--- Índices para historial
-CREATE INDEX IF NOT EXISTS idx_historial_incidencia ON historial_incidencias(incidencia_id);
-CREATE INDEX IF NOT EXISTS idx_historial_usuario ON historial_incidencias(usuario_id);
-CREATE INDEX IF NOT EXISTS idx_historial_fecha ON historial_incidencias(fecha_cambio);
+    fecha_cambio TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
--- -----------------------------------------------------------------------------
--- TABLA: adjuntos
--- Archivos adjuntos a incidencias (Normalización - relación 1:N)
--- -----------------------------------------------------------------------------
+    CONSTRAINT fk_historial_incidencia FOREIGN KEY (incidencia_id) REFERENCES incidencias(id) ON DELETE CASCADE,
+    CONSTRAINT fk_historial_usuario FOREIGN KEY (usuario_id) REFERENCES public.users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_historial_incidencia ON historial_incidencias(incidencia_id);
+
+-- ADJUNTOS
 CREATE TABLE IF NOT EXISTS adjuntos (
     id SERIAL PRIMARY KEY,
     incidencia_id INTEGER NOT NULL,
     nombre_archivo VARCHAR(255) NOT NULL,
     tipo_mime VARCHAR(100),
     tamanio_bytes BIGINT,
-    ruta_almacenamiento TEXT NOT NULL,  -- Ruta en el sistema de archivos o URL de storage
-    usuario_id TEXT NOT NULL,  -- Usuario que subió el archivo (ID del módulo de usuarios)
+    ruta_almacenamiento TEXT NOT NULL,
+    usuario_id TEXT NOT NULL, -- FK a public.users
     fecha_creacion TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
-    -- Foreign Keys
-    CONSTRAINT fk_adjuntos_incidencia 
-        FOREIGN KEY (incidencia_id) REFERENCES incidencias(id) ON DELETE CASCADE
+    CONSTRAINT fk_adjuntos_incidencia FOREIGN KEY (incidencia_id) REFERENCES incidencias(id) ON DELETE CASCADE,
+    CONSTRAINT fk_adjuntos_usuario FOREIGN KEY (usuario_id) REFERENCES public.users(id)
 );
 
--- Índice para adjuntos
 CREATE INDEX IF NOT EXISTS idx_adjuntos_incidencia ON adjuntos(incidencia_id);
 
--- -----------------------------------------------------------------------------
--- TABLA: comentarios
--- Comentarios en incidencias (Normalización - relación 1:N)
--- -----------------------------------------------------------------------------
+-- COMENTARIOS
 CREATE TABLE IF NOT EXISTS comentarios (
     id SERIAL PRIMARY KEY,
     incidencia_id INTEGER NOT NULL,
-    usuario_id TEXT NOT NULL,  -- ID del usuario (desde módulo de usuarios)
+    usuario_id TEXT NOT NULL, -- FK a public.users
     contenido TEXT NOT NULL,
     es_interno BOOLEAN NOT NULL DEFAULT FALSE,
     fecha_creacion TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_actualizacion TIMESTAMP WITH TIME ZONE,
     
-    -- Foreign Keys
-    CONSTRAINT fk_comentarios_incidencia 
-        FOREIGN KEY (incidencia_id) REFERENCES incidencias(id) ON DELETE CASCADE
+    CONSTRAINT fk_comentarios_incidencia FOREIGN KEY (incidencia_id) REFERENCES incidencias(id) ON DELETE CASCADE,
+    CONSTRAINT fk_comentarios_usuario FOREIGN KEY (usuario_id) REFERENCES public.users(id)
 );
 
--- Índices para comentarios
 CREATE INDEX IF NOT EXISTS idx_comentarios_incidencia ON comentarios(incidencia_id);
-CREATE INDEX IF NOT EXISTS idx_comentarios_usuario ON comentarios(usuario_id);
 
--- =============================================================================
--- VISTAS (Para simplificar consultas comunes)
--- =============================================================================
+-- -----------------------------------------------------------------------------
+-- VISTAS
+-- -----------------------------------------------------------------------------
 
--- Vista de incidencias con información de catálogos
 CREATE OR REPLACE VIEW v_incidencias_detalles AS
 SELECT 
     i.id,
@@ -222,50 +186,20 @@ SELECT
     c.codigo AS categoria_codigo,
     c.nombre AS categoria_nombre,
     i.usuario_reportante_id,
+    u_repo.full_name AS usuario_reportante_nombre,
     i.responsable_id,
-    i.salon_id,
+    u_resp.full_name AS responsable_nombre,
+    i.ubicacion_id,
+    r.codigo AS ubicacion_codigo,
+    r.nombre AS ubicacion_nombre,
+    r.ubicacion AS ubicacion_direccion,
     i.fecha_creacion,
     i.fecha_actualizacion,
     i.fecha_resolucion
 FROM incidencias i
     INNER JOIN estados e ON i.estado_id = e.id
     INNER JOIN prioridades p ON i.prioridad_id = p.id
-    LEFT JOIN categorias c ON i.categoria_id = c.id;
-
--- =============================================================================
--- DOCUMENTACIÓN DE ARQUITECTURA DE MICROSERVICIOS
--- =============================================================================
---
--- INFORMACIÓN INTERNA (almacenada en esta BD):
---   - Estados: Catálogo de estados de incidencias
---   - Prioridades: Catálogo de prioridades
---   - Categorías: Catálogo de tipos de incidencias
---   - Incidencias: Tickets/incidencias
---   - Historial: Cambios en incidencias
---   - Comentarios: Comentarios en incidencias
---   - Adjuntos: Archivos adjuntos
---
--- INFORMACIÓN EXTERNA (obtenida de otros microservicios):
---   - Usuarios: Desde módulo de autenticación/usuarios
---     Campos: id, nombre, email, rol, etc.
---     Endpoints: GET /usuarios/{id}, GET /usuarios/{email}
---   - Salones: Desde módulo de salones
---     Campos: id, nombre, edificio, piso, etc.
---     Endpoints: GET /salones/{id}
---
--- CONTROL DE ACCESO:
---   - Administrador: Puede ver todos los tickets, asignar responsables, cambiar estados
---   - Profesor/Estudiante: Solo ve sus propios tickets (como reportante)
---                          Solo puede crear tickets, no modificar procesos
---
--- FLUJO DE ESTADOS TÍPICO:
---   pendiente → asignada → en_proceso → resuelta → cerrada
---                                     ↘ cancelada
---
--- REQUERIMIENTOS FUNCIONALES IMPLEMENTADOS:
---   RF2: Crear incidencia - Tabla incidencias
---   RF3: Asignar responsable - Solo administrador
---   RF4: Estados del ticket - Solo administrador
---   RF5: Consultar incidencias - Con filtros por rol
---   RF7: Historial - Tabla historial_incidencias
--- =============================================================================
+    LEFT JOIN categorias c ON i.categoria_id = c.id
+    LEFT JOIN public.users u_repo ON i.usuario_reportante_id = u_repo.id
+    LEFT JOIN public.users u_resp ON i.responsable_id = u_resp.id
+    LEFT JOIN public.recursos r ON i.ubicacion_id = r.id;
