@@ -124,9 +124,6 @@ class IncidenciaService:
         # Verificar que el usuario existe
         usuario = UsuarioService.obtener_usuario_por_id(db, usuario_id)
         if not usuario:
-             # Si no lo encontramos pero tenemos datos del token, es extraño en una arquitectura compartida.
-             # Asumimos que el token es válido y el usuario existe en la tabla users aunque no lo haya traído la query por alguna razón
-             # (o replicación). Pero aquí es la misma DB. Así que si no está, no está.
              raise ValueError(f"Usuario {usuario_id} no encontrado en la base de datos")
 
         # Obtener estado inicial (pendiente)
