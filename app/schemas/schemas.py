@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from typing import Optional, List
+from uuid import UUID
 
 
 # =============================================================================
@@ -81,7 +82,7 @@ class UbicacionCreate(UbicacionBase):
 
 class UbicacionResponse(UbicacionBase):
     """Schema de respuesta para ubicaciones/recursos"""
-    id: str  # UUID en la tabla recursos
+    id: UUID  # UUID en la tabla recursos
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
